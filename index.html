@@ -101,14 +101,20 @@
            Hero 首屏
            ------------------ */
         .hero {
-            position: relative; height: 100vh; width: 100%; overflow: hidden; display: flex; align-items: flex-end; padding-bottom: 12vh; 
+            position: relative; height: 100vh; width: 100%; overflow: hidden; 
         }
         .hero-background { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; object-fit: cover; }
         .hero-fallback-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; object-fit: cover; filter: brightness(0.75); }
         .hero::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.2); z-index: 2; }
+        
+        /* 优化：使用绝对定位将标题固定在左下角 */
         .hero-content {
-            position: relative; z-index: 3; max-width: 1200px; margin: 0 auto; width: 100%;
-            padding: 0 48px; animation: fadeIn 1.5s ease-out; text-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+            position: absolute; 
+            bottom: 12vh;
+            left: 5vw;
+            z-index: 3;
+            animation: fadeIn 1.5s ease-out; 
+            text-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
         }
         .server-title { font-size: 80px; font-weight: 900; line-height: 1.05; letter-spacing: -0.04em; margin-bottom: 8px; }
 
@@ -199,7 +205,7 @@
         /* ------------------
            FAQ 常见问题
            ------------------ */
-        .faq-section { max-width: 800px; margin: 100px auto 60px; }
+        .faq-section { max-width: 800px; margin: 100px auto 100px; }
         .section-title { font-size: 40px; font-weight: 700; text-align: center; margin-bottom: 60px; color: #fff; }
         .faq-item { border-bottom: 1px solid var(--border-light); padding: 24px 0; background: transparent; }
         .faq-question { width: 100%; display: flex; justify-content: space-between; align-items: center; font-size: 18px; font-weight: 500; color: var(--text-primary); text-align: left; }
@@ -211,14 +217,40 @@
         .faq-item.active .faq-icon { transform: rotate(45deg); color: var(--accent); }
 
         /* ------------------
-           CTA 呼吁行动
+           底部全新过渡容器 (包含 CTA 与 Footer)
            ------------------ */
-        .cta-section {
-            text-align: center; padding: 80px 22px; margin: 40px auto 80px; max-width: 800px;
-            background: rgba(255,255,255,0.03); border-radius: 32px; border: 1px solid var(--border-light);
-            backdrop-filter: blur(10px);
+        .bottom-wrapper {
+            position: relative;
+            width: 100%;
+            /* 添加一层微弱的黑色遮罩，确保文字在 joinus.webp 上可读 */
+            background-image:
+                linear-gradient(to bottom, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.6) 100%),
+                url('joinus.webp');
+            background-size: cover;
+            background-position: center;
+            z-index: 5;
+            
+            /* 核心黑科技：通过 mask-image 将顶部平滑渐隐，完美融合前面固定的背景 */
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 150px, black 100%);
+            mask-image: linear-gradient(to bottom, transparent 0%, black 150px, black 100%);
         }
-        .cta-title { font-size: 32px; font-weight: 700; margin-bottom: 24px; color: #fff; }
+
+        .cta-section {
+            padding: 180px 5vw 100px; /* 增加顶部 Padding 避开上面的渐变遮罩区域 */
+            display: flex;
+            justify-content: flex-start; /* 将内容推至左侧 */
+            align-items: center;
+        }
+
+        .cta-content {
+            max-width: 700px;
+            text-align: left;
+            text-shadow: 0 4px 16px rgba(0,0,0,0.5); /* 增强背景可读性 */
+        }
+
+        .cta-title { font-size: 44px; font-weight: 700; margin-bottom: 16px; color: #fff; line-height: 1.2; }
+        .cta-desc { font-size: 18px; color: var(--text-secondary); margin-bottom: 32px; }
+
         .btn-large {
             display: inline-block; background-color: var(--text-primary); color: #000;
             padding: 14px 36px; border-radius: 50px; font-size: 18px; font-weight: 600; transition: 0.3s;
@@ -228,9 +260,18 @@
         /* ------------------
            页脚
            ------------------ */
-        footer {
-            border-top: 1px solid var(--border-light); padding: 50px 22px; color: var(--text-secondary); font-size: 13px; line-height: 1.8; text-align: center;
-            background: rgba(0,0,0,0.2); 
+        .glass-footer {
+            border-top: 1px solid var(--border-light); 
+            padding: 40px 5vw; 
+            color: var(--text-secondary); 
+            font-size: 13px; 
+            line-height: 1.8; 
+            text-align: left; /* 与 CTA 呼应，左对齐 */
+            
+            /* 毛玻璃不透明度参数与 global-glass-overlay 保持一致 */
+            background: rgba(10, 10, 10, 0.4); 
+            -webkit-backdrop-filter: blur(25px) saturate(120%);
+            backdrop-filter: blur(25px) saturate(120%);
         }
         .footer-thanks a { color: var(--text-primary); text-decoration: underline; }
         .footer-thanks a:hover { color: var(--accent); }
@@ -252,7 +293,9 @@
             .top-actions { top: 20px; right: 20px; }
             body.has-announcement .top-actions { top: 50px; }
             .top-actions.is-fixed, body.has-announcement .top-actions.is-fixed { right: 20px; }
-            .hero-content { padding: 0 24px; }
+            
+            /* 修正移动端首屏标题定位 */
+            .hero-content { left: 24px; bottom: 8vh; padding: 0; }
             .server-title { font-size: 48px; }
             
             .features-grid { grid-template-columns: 1fr; }
@@ -263,7 +306,8 @@
             .gallery-grid { grid-template-columns: 1fr; gap: 16px; }
             .gi-big, .gi-tall, .gi-normal { grid-column: span 1; grid-row: span 1; height: 300px; }
             
-            .cta-title { font-size: 26px; }
+            .cta-title { font-size: 32px; }
+            .cta-section { padding: 120px 24px 60px; }
             .announcement-bar { padding: 10px 35px 10px 15px; font-size: 12px; }
         }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
@@ -296,7 +340,6 @@
     </section>
 
     <div class="main-container">
-        
         <section class="intro-section">
             <h2 class="intro-slogan">由你创造的世界。</h2>
             <p class="intro-subtitle">原版增强、多样地牢、轻松建造、科技动力、乃至枪战决斗......这些都可以实现。码のMinecraft服务器为每一个玩家打造全面的游戏体验</p>
@@ -315,12 +358,25 @@
             <h2 class="section-title">常见问题</h2>
             <div id="faqContainer"></div>
         </section>
+    </div>
 
+    <div class="bottom-wrapper">
         <section class="cta-section">
-            <h2 class="cta-title">准备好开始您的史诗旅程了吗？</h2>
-            <p style="color: var(--text-secondary); margin-bottom: 30px;">下载最新整合包，加入码のMinecraft服务器</p>
-            <a href="https://mimaglows.com/how-to-download-mc/" target="_blank" class="btn-large">立即加入</a>
+            <div class="cta-content">
+                <h2 class="cta-title">准备好开始您的史诗旅程了吗？</h2>
+                <p class="cta-desc">下载最新整合包，加入码のMinecraft服务器</p>
+                <a href="https://mimaglows.com/how-to-download-mc/" target="_blank" class="btn-large">立即加入</a>
+            </div>
         </section>
+
+        <footer class="glass-footer">
+            <div class="footer-thanks">
+                服务器的构建离不开各式各样的插件和模组的维护，<a href="https://mimaglows.com" target="_blank">点击查看</a>。
+            </div>
+            <div class="footer-copyright">
+                &copy; 2025-2026 MimaGlows 运营协助：_nullcat LittleC
+            </div>
+        </footer>
     </div>
 
     <div class="feature-modal" id="featureModal">
@@ -349,15 +405,6 @@
             </div>
         </div>
     </div>
-
-    <footer>
-        <div class="footer-thanks">
-            服务器的构建离不开各式各样的插件和模组的维护，<a href="https://mimaglows.com" target="_blank">点击查看</a>。
-        </div>
-        <div class="footer-copyright">
-            &copy; 2025-2026 MimaGlows 运营协助：_nullcat LittleC
-        </div>
-    </footer>
 
     <script>
         const SERVER_DATA = {
@@ -465,8 +512,6 @@
                     topNav.classList.remove('is-fixed');
                 }
             }, { passive: true });
-            
-            // 已删除 IP 检测 fetch 代码
         });
 
         const body = document.body;
