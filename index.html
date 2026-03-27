@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>码のMinecraft服务器 | MimaGlows</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    
+    <style>
+        /* ------------------------------------------
+           核心全局变量
+           ------------------------------------------ */
+        :root {
+            --text-primary: #f5f5f7;
+            --text-secondary: #f5f5f7; /* 按要求修改，与主文本同色 */
+            --accent: #4ade80; 
+            --border-light: rgba(255, 255, 255, 0.15);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            outline: none;
+            -webkit-font-smoothing: antialiased;
+            -webkit-tap-highlight-color: transparent; 
+        }
+
+        /* 1. 全局静态底层背景 */
+        body {
+            background-image: url('background.png'); 
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            color: var(--text-primary);
+            font-family: 'Inter', 'Noto Sans SC', -apple-system, sans-serif;
+            overflow-x: hidden;
+            font-size: 17px;
+            line-height: 1.5;
+        }
+
+        /* 2. 动态照片悬停背景层 (位于静态背景和毛玻璃层之间) */
+        .dynamic-hover-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-size: cover;
+            background-position: center;
+            z-index: -3; /* 盖在 body 背景上，但在毛玻璃下方 */
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            will-change: opacity;
+        }
+
+        /* 3. 全局毛玻璃遮罩 (统一处理其下方所有图层的模糊) */
+        .global-glass-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(10, 10, 10, 0.4); /* 降低了不透明度，让底图透出来 */
+            -webkit-backdrop-filter: blur(25px) saturate(120%); /* 降低了模糊度，保留图片轮廓 */
+            backdrop-filter: blur(25px) saturate(120%);
+            z-index: -2; 
+        }
+
+        a { text-decoration: none; transition: 0.3s; color: inherit; }
+        button { cursor: pointer; border: none; background: none; transition: 0.3s; color: inherit; }
+
+        /* ------------------
+           顶部公告栏 (支持开关)
+           ------------------ */
+        .announcement-bar {
+            position: fixed; top: 0; left: 0; width: 100%;
+            background: rgba(234, 179, 8, 0.85); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+            color: #000; text-align: center; padding: 12px 40px; font-size: 14px; font-weight: 600;
+            z-index: 9999; display: none; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+        .announcement-bar.show { display: flex; }
+        .announcement-bar .close-announcement {
+            position: absolute; right: 20px; font-size: 24px; color: #000; line-height: 1; opacity: 0.6; transition: 0.3s;
+        }
+        .announcement-bar .close-announcement:hover { opacity: 1; }
+
+        /* ------------------
+           顶部操作区
+           ------------------ */
+        .top-actions {
+            position: absolute; top: 30px; right: 40px; z-index: 1000; display: flex; gap: 16px; align-items: center; transition: all 0.3s ease;
+        }
+        body.has-announcement .top-actions { top: 60px; }
+        .top-actions.is-fixed {
+            position: fixed; top: -100px; right: 40px; animation: slideDownFixed 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        body.has-announcement .top-actions.is-fixed { animation: slideDownFixedAnnounce 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes slideDownFixed { to { top: 20px; } }
+        @keyframes slideDownFixedAnnounce { to { top: 60px; } }
+
+        .btn-action {
+            background-color: rgba(255, 255, 255, 0.1); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+            border: 1px solid var(--border-light); color: var(--text-primary); padding: 8px 20px;
+            border-radius: 50px; font-size: 14px; font-weight: 500; display: flex; align-items: center; justify-content: center; will-change: transform;
+        }
+        .btn-action:hover { background-color: var(--text-primary); color: #000; transform: scale(1.05); }
+
+        /* ------------------
+           Hero 首屏
+           ------------------ */
+        .hero {
+            position: relative; height: 100vh; width: 100%; overflow: hidden; display: flex; align-items: flex-end; padding-bottom: 12vh; 
+        }
+        .hero-background { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; object-fit: cover; }
+        .hero-fallback-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; object-fit: cover; filter: brightness(0.75); }
+        .hero::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.2); z-index: 2; }
+        .hero-content {
+            position: relative; z-index: 3; max-width: 1200px; margin: 0 auto; width: 100%;
+            padding: 0 48px; animation: fadeIn 1.5s ease-out; text-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+        }
+        .server-title { font-size: 80px; font-weight: 900; line-height: 1.05; letter-spacing: -0.04em; margin-bottom: 8px; }
+
+        .main-container { max-width: 1400px; margin: 0 auto; padding: 0 22px; position: relative; z-index: 5; }
+
+        /* ------------------
+           介绍页 (Apple 风格四大玩法)
+           ------------------ */
+        .intro-section { padding: 120px 0 60px; text-align: center; }
+        .intro-slogan {
+            font-size: 48px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 12px; 
+            background: linear-gradient(180deg, #fff 30%, rgba(255,255,255,0.5));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .intro-subtitle { font-size: 18px; color: var(--text-secondary); margin-bottom: 60px; font-weight: 400; max-width: 600px; margin-left: auto; margin-right: auto; }
+        .features-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; max-width: 1200px; margin: 0 auto; }
+        .feature-card {
+            position: relative; border-radius: 24px; overflow: hidden; cursor: pointer; height: 400px;
+            border: 1px solid rgba(255, 255, 255, 0.1); background-color: rgba(0,0,0,0.3); will-change: transform;
+        }
+        .feature-card img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+        .feature-card::after {
+            content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 50%;
+            background: linear-gradient(to top, rgba(0,0,0,0.8), transparent); pointer-events: none;
+        }
+        .feature-card:hover img { transform: scale(1.05); }
+        .feature-title-front { position: absolute; bottom: 24px; left: 24px; z-index: 2; font-size: 28px; font-weight: 700; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+
+        /* 玩法详情弹窗 */
+        .feature-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.85); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+            z-index: 3000; display: flex; align-items: center; justify-content: center;
+            opacity: 0; visibility: hidden; transition: 0.4s; padding: 20px;
+        }
+        .feature-modal.open { opacity: 1; visibility: visible; }
+        .fm-content {
+            position: relative; max-width: 1000px; width: 100%; height: 60vh; min-height: 400px;
+            background: rgba(20, 20, 20, 0.6); border: 1px solid var(--border-light); border-radius: 32px;
+            display: flex; overflow: hidden; transform: scale(0.95); transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .feature-modal.open .fm-content { transform: scale(1); }
+        .fm-left { flex: 1.2; position: relative; }
+        .fm-left img { width: 100%; height: 100%; object-fit: cover; }
+        .fm-right { flex: 1; padding: 60px 50px; display: flex; flex-direction: column; justify-content: center; text-align: left; }
+        .fm-title { font-size: 40px; font-weight: 800; margin-bottom: 20px; color: #fff; }
+        .fm-desc { font-size: 18px; color: var(--text-secondary); line-height: 1.7; }
+        .close-fm { position: absolute; top: 24px; right: 30px; font-size: 40px; color: #fff; z-index: 10; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+
+        /* ------------------
+           照片墙 
+           ------------------ */
+        .gallery-section { padding: 60px 0; }
+        .gallery-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; grid-auto-flow: dense; }
+        .gallery-item {
+            position: relative; border-radius: 24px; overflow: hidden; cursor: pointer;
+            border: 1px solid transparent; transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.4s;
+            background-color: rgba(0,0,0,0.3); will-change: transform;
+        }
+        .gallery-item img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+        .gallery-item:hover { transform: scale(1.02); border-color: rgba(255, 255, 255, 0.3); z-index: 10; }
+        .gallery-item:hover img { transform: scale(1.08); }
+
+        .gi-big { grid-column: span 2; grid-row: span 2; height: 600px; }
+        .gi-tall { grid-row: span 2; height: 600px;}
+        .gi-normal { height: 289px; }
+
+        .gallery-footer { text-align: center; margin-top: 50px; }
+        .tooltip-wrapper { position: relative; display: inline-block; }
+        .tooltip-text {
+            visibility: hidden; width: 260px; background-color: rgba(30, 30, 30, 0.85);
+            -webkit-backdrop-filter: blur(15px); backdrop-filter: blur(15px); color: #fff; text-align: center; border-radius: 12px; padding: 12px 16px;
+            position: absolute; z-index: 10; bottom: 130%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s, transform 0.3s;
+            font-size: 13px; line-height: 1.5; pointer-events: none; border: 1px solid var(--border-light); box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .tooltip-text::after {
+            content: ""; position: absolute; top: 100%; left: 50%; margin-left: -6px; border-width: 6px; border-style: solid; border-color: rgba(30, 30, 30, 0.85) transparent transparent transparent;
+        }
+        .tooltip-wrapper.cn-ip:hover .tooltip-text { visibility: visible; opacity: 1; transform: translateX(-50%) translateY(-5px); }
+
+        /* 照片放大弹窗 */
+        .lightbox-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.85);
+            -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); z-index: 2000; display: flex; align-items: center; justify-content: center;
+            opacity: 0; visibility: hidden; transition: 0.4s; padding: 40px;
+        }
+        .lightbox-modal.open { opacity: 1; visibility: visible; }
+        .lightbox-content { position: relative; max-width: 1100px; width: 100%; display: flex; gap: 40px; transform: scale(0.95); transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        .lightbox-modal.open .lightbox-content { transform: scale(1); }
+        .lb-img-wrap { flex: 2; border-radius: 20px; overflow: hidden; border: 1px solid var(--border-light); }
+        .lb-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
+        .lb-info-wrap { flex: 1; padding: 20px 0; display: flex; flex-direction: column; justify-content: center; text-align: left; }
+        .lb-title { font-size: 32px; font-weight: 700; margin-bottom: 8px; color: #fff; }
+        .lb-credits { font-size: 14px; color: var(--accent); margin-bottom: 16px; font-weight: 500; }
+        .lb-desc { color: var(--text-secondary); font-size: 16px; line-height: 1.6; }
+        .close-lb { position: absolute; top: -40px; right: 0; font-size: 36px; color: var(--text-secondary); }
+        .close-lb:hover { color: #fff; }
+
+        /* ------------------
+           FAQ 常见问题
+           ------------------ */
+        .faq-section { max-width: 800px; margin: 100px auto 60px; }
+        .section-title { font-size: 40px; font-weight: 700; text-align: center; margin-bottom: 60px; color: #fff; }
+        .faq-item { border-bottom: 1px solid var(--border-light); padding: 24px 0; background: transparent; }
+        .faq-question { width: 100%; display: flex; justify-content: space-between; align-items: center; font-size: 18px; font-weight: 500; color: var(--text-primary); text-align: left; }
+        .faq-question:hover { color: var(--accent); }
+        .faq-icon { font-size: 24px; color: var(--text-secondary); transition: 0.3s; }
+        .faq-answer { max-height: 0; overflow: hidden; transition: max-height 0.4s ease-out; color: var(--text-secondary); padding-right: 40px; font-size: 16px; }
+        .faq-answer p { padding-top: 16px; padding-bottom: 8px; }
+        .faq-item.active .faq-answer { max-height: 300px; }
+        .faq-item.active .faq-icon { transform: rotate(45deg); color: var(--accent); }
+
+        /* ------------------
+           CTA 呼吁行动
+           ------------------ */
+        .cta-section {
+            text-align: center; padding: 80px 22px; margin: 40px auto 80px; max-width: 800px;
+            background: rgba(255,255,255,0.03); border-radius: 32px; border: 1px solid var(--border-light);
+            backdrop-filter: blur(10px);
+        }
+        .cta-title { font-size: 32px; font-weight: 700; margin-bottom: 24px; color: #fff; }
+        .btn-large {
+            display: inline-block; background-color: var(--text-primary); color: #000;
+            padding: 14px 36px; border-radius: 50px; font-size: 18px; font-weight: 600; transition: 0.3s;
+        }
+        .btn-large:hover { background-color: var(--accent); transform: scale(1.05); box-shadow: 0 0 30px rgba(74, 222, 128, 0.3); }
+
+        /* ------------------
+           页脚
+           ------------------ */
+        footer {
+            border-top: 1px solid var(--border-light); padding: 50px 22px; color: var(--text-secondary); font-size: 13px; line-height: 1.8; text-align: center;
+            background: rgba(0,0,0,0.2); 
+        }
+        .footer-thanks a { color: var(--text-primary); text-decoration: underline; }
+        .footer-thanks a:hover { color: var(--accent); }
+        .footer-copyright { margin-top: 12px; }
+
+        /* ------------------
+           移动端适配优化
+           ------------------ */
+        @media (max-width: 992px) {
+            .features-grid { grid-template-columns: repeat(2, 1fr); }
+            .gallery-grid { grid-template-columns: repeat(2, 1fr); }
+            .gi-big { grid-column: span 2; }
+            .lightbox-content { flex-direction: column; gap: 20px; }
+            .fm-content { flex-direction: column; height: auto; }
+            .fm-left { height: 300px; }
+            .fm-right { padding: 40px 30px; }
+        }
+        @media (max-width: 768px) {
+            .top-actions { top: 20px; right: 20px; }
+            body.has-announcement .top-actions { top: 50px; }
+            .top-actions.is-fixed, body.has-announcement .top-actions.is-fixed { right: 20px; }
+            .hero-content { padding: 0 24px; }
+            .server-title { font-size: 48px; }
+            
+            .features-grid { grid-template-columns: 1fr; }
+            .feature-card { height: 300px; }
+            .intro-slogan { font-size: 36px; margin-bottom: 12px; }
+            .intro-subtitle { font-size: 15px; margin-bottom: 40px; }
+            
+            .gallery-grid { grid-template-columns: 1fr; gap: 16px; }
+            .gi-big, .gi-tall, .gi-normal { grid-column: span 1; grid-row: span 1; height: 300px; }
+            
+            .cta-title { font-size: 26px; }
+            .tooltip-text { width: 220px; font-size: 12px; }
+            .announcement-bar { padding: 10px 35px 10px 15px; font-size: 12px; }
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+    <div class="dynamic-hover-bg" id="dynamicHoverBg"></div>
+
+    <div class="global-glass-overlay"></div>
+
+    <div id="announcementBar" class="announcement-bar">
+        <span id="announcementText"></span>
+        <button class="close-announcement" onclick="closeAnnouncement()">&times;</button>
+    </div>
+
+    <div class="top-actions" id="topNav">
+        <a href="https://mimaglows.com/mc-updates/" target="_blank" class="btn-action">更新公告</a>
+        <a href="https://mimaglows.com/how-to-download-mc/" target="_blank" class="btn-action">如何安装</a>
+    </div>
+
+    <section class="hero" id="heroSection">
+        <video autoplay loop muted playsinline class="hero-background" id="heroVideo">
+            <source src="background.mp4" type="video/mp4">
+        </video>
+        <img src="background.png" class="hero-fallback-img" alt="Background">
+        <div class="hero-content">
+            <h1 class="server-title">码のMinecraft服务器</h1>
+        </div>
+    </section>
+
+    <div class="main-container">
+        
+        <section class="intro-section">
+            <h2 class="intro-slogan">由你创造的世界。</h2>
+            <p class="intro-subtitle">探索我们精心打造的多元化游戏内容，找到属于你的乐趣。</p>
+            <div class="features-grid" id="featuresContainer"></div>
+        </section>
+
+        <section class="gallery-section">
+            <div class="gallery-grid" id="galleryContainer"></div>
+            
+            <div class="gallery-footer">
+                <div class="tooltip-wrapper" id="morePhotosWrapper">
+                    <a href="https://photos.app.goo.gl/trBJVogZhUjZFy5P6" target="_blank" class="btn-large">查看拍摄的更多照片</a>
+                    <span class="tooltip-text">Google相册链接，您所在的国家/地区可能无法访问该页面</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="faq-section">
+            <h2 class="section-title">常见问题</h2>
+            <div id="faqContainer"></div>
+        </section>
+
+        <section class="cta-section">
+            <h2 class="cta-title">准备好开始你的旅程了吗？</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 30px;">下载最新整合包，加入20名玩家共建的世界。</p>
+            <a href="https://mimaglows.com/how-to-download-mc/" target="_blank" class="btn-large">立即加入</a>
+        </section>
+    </div>
+
+    <div class="feature-modal" id="featureModal">
+        <div class="fm-content">
+            <button class="close-fm" onclick="closeFeatureModal()">&times;</button>
+            <div class="fm-left"><img src="" id="fmImg" alt="Feature Detail"></div>
+            <div class="fm-right">
+                <h3 class="fm-title" id="fmTitle">标题</h3>
+                <p class="fm-desc" id="fmDesc">详细描述</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="lightbox-modal" id="lightbox">
+        <div class="lightbox-content">
+            <button class="close-lb" onclick="closeLightbox()">&times;</button>
+            <div class="lb-img-wrap"><img src="" id="lbImg" alt="Enlarged view"></div>
+            <div class="lb-info-wrap">
+                <h3 class="lb-title" id="lbTitle">图片介绍</h3>
+                <div class="lb-credits">
+                    <span id="lbBuilder">建造：未知玩家</span>
+                    <span style="margin: 0 8px; color: rgba(255,255,255,0.2);">|</span>
+                    <span id="lbPhotographer">摄影：未知玩家</span>
+                </div>
+                <p class="lb-desc" id="lbDesc">详情</p>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="footer-thanks">
+            服务器的构建离不开各式各样的插件和模组的维护，<a href="https://mimaglows.com" target="_blank">点击查看</a>。
+        </div>
+        <div class="footer-copyright">
+            &copy; 2025-2026 MimaGlows 运营协助：_nullcat LittleC
+        </div>
+    </footer>
+
+    <script>
+        const SERVER_DATA = {
+            // 公告栏设置 (控制开/关)
+            announcement: {
+                show: true, 
+                text: "🚧 提醒：服务器目前正处于维护状态，正在升级至 Ver5.0_Ras，预计将于今晚20:00恢复访问。"
+            },
+            features: [
+                { title: "建造", desc: "提供丰富的方块与无界的空间，无论中世纪古堡还是未来都市，你的灵感在此落成。", coverImg: "jieshao1.webp", detailImg: "details1.webp" },
+                { title: "冒险", desc: "踏入暮色森林与危机四伏的副本深渊，斩杀Boss，搜集稀世珍宝。", coverImg: "jieshao2.webp", detailImg: "details2.webp" },
+                { title: "发明", desc: "依托机械动力与先进科技模组，构建庞大的全自动流水线和资源运输网络。", coverImg: "jieshao3.webp", detailImg: "details3.webp" },
+                { title: "对战", desc: "红石竞技场每周开启，与全服玩家展开激烈的 PVP 大乱斗及各类休闲小游戏。", coverImg: "jieshao4.webp", detailImg: "details4.webp" }
+            ],
+            faqs: [
+                { q: "服务器目前运行的是什么版本？", a: "我们目前运行在 <strong>Ver5.0_Ras</strong> 版本。所需的客户端版本为 <strong>1.21.1 Java Neoforge</strong>。" },
+                { q: "服务器何时开始运营的？人数上限是多少？", a: "MimaGlows 服务器于 <strong>2025年7月1日</strong> 正式开始运营。为了保证流畅的游戏体验，目前我们设置的最大同时在线人数为 <strong>20人</strong>。" }
+            ],
+            gallery: [
+                { src: "./Picflow Images Mar 27/serverview10.webp", title: "蔚蓝苍穹下的主城", builder: "_nullcat", photographer: "LittleC", desc: "MimaGlows 的核心地标，采用中世纪与现代融合的建筑风格，所有新玩家的起点。" },
+                { src: "./Picflow Images Mar 27/serverview11.webp", title: "科技港口", builder: "某位玩家ID", photographer: "某位摄影师", desc: "自动化模组的核心区域，处理全服的资源运输与能耗。" },
+                { src: "./Picflow Images Mar 27/create2.webp", title: "机械动力区", builder: "某位玩家ID", photographer: "某位摄影师", desc: "充满了齿轮与蒸汽的创造力区域，玩家们在这里构建复杂的自动化生产线。" },
+                { src: "./Picflow Images Mar 27/serverview15.webp", title: "副本：暮色森林入口", builder: "某位玩家ID", photographer: "某位摄影师", desc: "充满未知的冒险区域，只有最勇敢的工匠才敢踏入寻找稀有材料。" },
+                { src: "./Picflow Images Mar 27/angel2.webp", title: "天使纪念碑", builder: "某位玩家ID", photographer: "某位摄影师", desc: "位于主城广场中心，纪念服务器Ver5.0版本的胜利更新。" },
+                { src: "./Picflow Images Mar 27/serverview3.webp", title: "红石竞技场", builder: "某位玩家ID", photographer: "某位摄影师", desc: "PVP和小游戏的核心区域，每周六晚举行全服大乱斗。" },
+                { src: "./Picflow Images Mar 27/serverview12.webp", title: "未知建筑 12", builder: "某位玩家ID", photographer: "某位摄影师", desc: "记录了服务器美丽的瞬间。" },
+                { src: "./Picflow Images Mar 27/serverview18.webp", title: "未知建筑 18", builder: "某位玩家ID", photographer: "某位摄影师", desc: "记录了服务器美丽的瞬间。" },
+                { src: "./Picflow Images Mar 27/serverview19.webp", title: "未知建筑 19", builder: "某位玩家ID", photographer: "某位摄影师", desc: "记录了服务器美丽的瞬间。" },
+                { src: "./Picflow Images Mar 27/serverview8.webp", title: "未知建筑 8", builder: "某位玩家ID", photographer: "某位摄影师", desc: "记录了服务器美丽的瞬间。" }
+            ]
+        };
+
+        const GRID_LAYOUTS = ["gi-big", "gi-normal", "gi-normal", "gi-tall", "gi-normal", "gi-normal", "gi-big", "gi-normal", "gi-normal", "gi-tall"];
+        let activeGalleryData = [];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // --- 0. 公告栏初始化 ---
+            if (SERVER_DATA.announcement.show) {
+                document.getElementById('announcementText').innerText = SERVER_DATA.announcement.text;
+                document.getElementById('announcementBar').classList.add('show');
+                document.body.classList.add('has-announcement');
+            }
+
+            // --- 1. 视频强制静音 ---
+            const video = document.getElementById('heroVideo');
+            if(video) {
+                video.muted = true; 
+                video.play().catch(() => console.log("视频自动播放被阻止"));
+                video.addEventListener('error', () => video.remove());
+            }
+
+            // --- 2. 渲染四大玩法 ---
+            const featuresContainer = document.getElementById('featuresContainer');
+            SERVER_DATA.features.forEach((item, index) => {
+                const card = document.createElement('div');
+                card.className = 'feature-card';
+                card.innerHTML = `<img src="${item.coverImg}" alt="${item.title}" loading="lazy"><div class="feature-title-front">${item.title}</div>`;
+                card.addEventListener('click', () => openFeatureModal(index));
+                featuresContainer.appendChild(card);
+            });
+
+            // --- 3. 渲染照片墙 ---
+            const galleryContainer = document.getElementById('galleryContainer');
+            let shuffledGallery = [...SERVER_DATA.gallery].sort(() => 0.5 - Math.random());
+            activeGalleryData = shuffledGallery.slice(0, 10);
+
+            activeGalleryData.forEach((item, index) => {
+                const el = document.createElement('div');
+                const layoutStyle = GRID_LAYOUTS[index % GRID_LAYOUTS.length]; 
+                el.className = `gallery-item ${layoutStyle}`;
+                el.dataset.src = item.src; // 记录真实图片路径用于悬停置换
+                el.innerHTML = `<img src="${item.src}" alt="${item.title}" loading="lazy">`; 
+                
+                // 新增动态图片背景的悬停事件
+                el.addEventListener('mouseenter', handleGalleryHover);
+                el.addEventListener('mouseleave', handleGalleryLeave);
+                el.addEventListener('click', () => openLightbox(index));
+                
+                galleryContainer.appendChild(el);
+            });
+
+            // --- 4. 渲染 FAQ ---
+            const faqContainer = document.getElementById('faqContainer');
+            SERVER_DATA.faqs.forEach(item => {
+                const faqItem = document.createElement('div');
+                faqItem.className = 'faq-item';
+                faqItem.innerHTML = `<button class="faq-question"><span>${item.q}</span><span class="faq-icon">+</span></button><div class="faq-answer"><p>${item.a}</p></div>`;
+                faqItem.querySelector('.faq-question').addEventListener('click', function() {
+                    const parent = this.parentElement;
+                    document.querySelectorAll('.faq-item').forEach(el => {
+                        if(el !== parent) el.classList.remove('active');
+                    });
+                    parent.classList.toggle('active');
+                });
+                faqContainer.appendChild(faqItem);
+            });
+
+            // --- 5. 监听滚动吸顶 ---
+            const topNav = document.getElementById('topNav');
+            const heroSection = document.getElementById('heroSection');
+            window.addEventListener('scroll', () => {
+                if (window.scrollY > heroSection.offsetHeight * 0.8) {
+                    topNav.classList.add('is-fixed');
+                } else {
+                    topNav.classList.remove('is-fixed');
+                }
+            }, { passive: true });
+
+            // --- 6. IP 检测 ---
+            fetch('https://get.geojs.io/v1/ip/country.json')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.country === 'CN' || data.country_3 === 'CHN') {
+                        document.getElementById('morePhotosWrapper').classList.add('cn-ip');
+                    }
+                }).catch(err => console.log('IP 检测失败', err));
+        });
+
+        const body = document.body;
+
+        // --- 公告栏关闭功能 ---
+        function closeAnnouncement() {
+            document.getElementById('announcementBar').classList.remove('show');
+            document.body.classList.remove('has-announcement');
+        }
+
+        // --- 玩法弹窗 ---
+        const featureModal = document.getElementById('featureModal');
+        const fmImg = document.getElementById('fmImg');
+        const fmTitle = document.getElementById('fmTitle');
+        const fmDesc = document.getElementById('fmDesc');
+
+        function openFeatureModal(index) {
+            const data = SERVER_DATA.features[index];
+            fmImg.src = data.detailImg;
+            fmTitle.innerText = data.title;
+            fmDesc.innerText = data.desc;
+            featureModal.classList.add('open');
+            body.style.overflow = 'hidden';
+        }
+        function closeFeatureModal() {
+            featureModal.classList.remove('open');
+            body.style.overflow = '';
+        }
+        featureModal.addEventListener('click', (e) => { if (e.target === featureModal) closeFeatureModal(); });
+
+        // --- 照片墙真实图片悬停置换 ---
+        const dynamicHoverBg = document.getElementById('dynamicHoverBg');
+        function handleGalleryHover(e) {
+            const imgSrc = e.currentTarget.dataset.src;
+            dynamicHoverBg.style.backgroundImage = `url('${imgSrc}')`;
+            dynamicHoverBg.style.opacity = '1';
+        }
+        function handleGalleryLeave() {
+            dynamicHoverBg.style.opacity = '0';
+        }
+
+        // --- 照片弹窗 ---
+        const lightbox = document.getElementById('lightbox');
+        const lbImg = document.getElementById('lbImg');
+        const lbTitle = document.getElementById('lbTitle');
+        const lbBuilder = document.getElementById('lbBuilder');
+        const lbPhotographer = document.getElementById('lbPhotographer');
+        const lbDesc = document.getElementById('lbDesc');
+
+        function openLightbox(index) {
+            const data = activeGalleryData[index]; 
+            lbImg.src = data.src;
+            lbTitle.innerText = data.title;
+            lbBuilder.innerText = "建造：" + (data.builder || "未知玩家");
+            lbPhotographer.innerText = "摄影：" + (data.photographer || "未知玩家");
+            lbDesc.innerText = data.desc;
+            lightbox.classList.add('open');
+            body.style.overflow = 'hidden';
+        }
+        function closeLightbox() {
+            lightbox.classList.remove('open');
+            body.style.overflow = '';
+        }
+        lightbox.addEventListener('click', (e) => { if (e.target === lightbox) closeLightbox(); });
+
+        // 全局 ESC 键
+        document.addEventListener('keydown', (e) => { 
+            if (e.key === 'Escape') {
+                closeLightbox();
+                closeFeatureModal();
+            }
+        });
+    </script>
+</body>
+</html>
